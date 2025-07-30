@@ -76,13 +76,13 @@ exports.loginUser = async (req, res) => {
         // Find user in DB
         const user = await User.findOne({email});
         if (!user) {
-            return res.status(401).json({ message: "Invalid email or password" });
+            return res.status(401).json({ message: "User with this email does not exist" });
         }
 
         // Check password
         const isPasswordCorrect = await bcrypt.compare(password, user.password);
         if (!isPasswordCorrect) {
-            return res.status(401).json({ message: "Invalid email or password" });
+            return res.status(401).json({ message: "Incorrect password" });
         }
 
         // Set session data
