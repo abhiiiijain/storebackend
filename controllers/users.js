@@ -1,6 +1,7 @@
-const User = require("../models/users");
 const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
+
+// Temporary in-memory user storage for testing
+const users = [];
 
 exports.createUser = async (req, res) => {
     try {
@@ -20,7 +21,7 @@ exports.createUser = async (req, res) => {
         }
 
         // Check if user already exists
-        const existingUser = await User.findOne({ email });
+        const existingUser = users.find(user => user.email === email);
         if (existingUser) {
             return res.status(400).json({ message: "User with this email already exists" });
         }
@@ -30,13 +31,21 @@ exports.createUser = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         // Create user
-        const user = await User.create({
+        const user = {
+            _id: Date.now().toString(),
             name,
             email,
             password: hashedPassword,
             shopName,
-            shopAddress
-        });
+            shopAddress,
+            createdAt: new Date()
+        };
+
+        users.push(user);
+
+        // Set session data
+        req.session.userId = user._id;
+        req.session.email = user.email;
 
         // Remove password from response
         const userResponse = {
@@ -69,7 +78,7 @@ exports.loginUser = async (req, res) => {
         }
 
         // Find user
-        const user = await User.findOne({ email });
+        const user = users.find(u => u.email === email);
         if (!user) {
             return res.status(401).json({ message: "Invalid email or password" });
         }
@@ -80,12 +89,9 @@ exports.loginUser = async (req, res) => {
             return res.status(401).json({ message: "Invalid email or password" });
         }
 
-        // Generate JWT token
-        const token = jwt.sign(
-            { userId: user._id, email: user.email },
-            process.env.JWT_SECRET || "your-secret-key",
-            { expiresIn: "24h" }
-        );
+        // Set session data
+        req.session.userId = user._id;
+        req.session.email = user.email;
 
         // Remove password from response
         const userResponse = {
@@ -98,8 +104,7 @@ exports.loginUser = async (req, res) => {
 
         res.status(200).json({
             message: "Login successful",
-            user: userResponse,
-            token
+            user: userResponse
         });
 
     } catch (error) {
@@ -111,13 +116,51 @@ exports.loginUser = async (req, res) => {
 // Get user profile (protected route)
 exports.getUserProfile = async (req, res) => {
     try {
-        const user = await User.findById(req.user.userId).select("-password");
+        const user = users.find(u => u._id === req.user.userId);
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
-        res.status(200).json({ user });
+        
+        const { password, ...userWithoutPassword } = user;
+        res.status(200).json({ user: userWithoutPassword });
     } catch (error) {
         console.error("Error getting user profile:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+// Logout user
+exports.logoutUser = async (req, res) => {
+    try {
+        req.session.destroy((err) => {
+            if (err) {
+                return res.status(500).json({ message: "Error logging out" });
+            }
+            res.clearCookie('connect.sid');
+            res.status(200).json({ message: "Logged out successfully" });
+        });
+    } catch (error) {
+        console.error("Error logging out:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+// Check if user is authenticated
+exports.checkAuth = async (req, res) => {
+    try {
+        if (!req.session.userId) {
+            return res.status(401).json({ message: "Not authenticated" });
+        }
+        
+        const user = users.find(u => u._id === req.session.userId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        
+        const { password, ...userWithoutPassword } = user;
+        res.status(200).json({ user: userWithoutPassword });
+    } catch (error) {
+        console.error("Error checking auth:", error);
         res.status(500).json({ message: "Internal server error" });
     }
 };
