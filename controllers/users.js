@@ -1,5 +1,5 @@
 const bcrypt = require("bcrypt");
-
+const User = require("../models/users");
 // Temporary in-memory user storage for testing
 const users = [];
 
@@ -20,8 +20,8 @@ exports.createUser = async (req, res) => {
             return res.status(400).json({ message: "Password must be at least 6 characters long" });
         }
 
-        // Check if user already exists
-        const existingUser = users.find(user => user.email === email);
+        // Check if user already exists in DB
+        const existingUser = await User.findOne({email});
         if (existingUser) {
             return res.status(400).json({ message: "User with this email already exists" });
         }
@@ -30,18 +30,14 @@ exports.createUser = async (req, res) => {
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // Create user
-        const user = {
-            _id: Date.now().toString(),
+        // Create user in DB
+        const user = await User.create({
             name,
             email,
             password: hashedPassword,
             shopName,
-            shopAddress,
-            createdAt: new Date()
-        };
-
-        users.push(user);
+            shopAddress
+        });
 
         // Set session data
         req.session.userId = user._id;
@@ -77,8 +73,8 @@ exports.loginUser = async (req, res) => {
             return res.status(400).json({ message: "Email and password are required" });
         }
 
-        // Find user
-        const user = users.find(u => u.email === email);
+        // Find user in DB
+        const user = await User.findOne({email});
         if (!user) {
             return res.status(401).json({ message: "Invalid email or password" });
         }

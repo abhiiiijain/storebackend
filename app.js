@@ -31,8 +31,7 @@ readdirSync("./routes").map((route) =>
 );
 
 const server = () => {
-  // Temporarily comment out database connection for testing
-  // db();
+  db();
   app.listen(PORT, () => {
     console.log("listening to port:", PORT);
   });
